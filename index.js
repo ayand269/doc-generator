@@ -14,6 +14,13 @@ if (!jsonDocPath) {
     process.exit(1);
 }
 
+function addLineToAFile(filePath, replaceBy, replaceWith) {
+    let data = fs.readFileSync(filePath, 'utf8')
+    
+    const updatedContent = data.replace(replaceBy, replaceWith)
+    fs.writeFileSync(filePath, updatedContent, 'utf8')
+}
+
 function convertToJsonString(txt) {
     const escapedString = txt.replace(/"/g, '\\"');
 
@@ -113,10 +120,12 @@ process.chdir(baseDir.join('/'));
 
 // Create Next.js project with markdoc
 // execSync(`npx create-next-app@latest ${projectName} --ts --example "https://github.com/ayand269/api-structure-example"`);
-
+const projectDir = process.cwd() + '/' + projectName;
 // go to new project dir
 baseDir.push(projectName);
 process.chdir(baseDir.join('/'));
+
+
 
 let allItems = postmanJsonData.item;
 let sidebarElement = [
@@ -134,12 +143,31 @@ for (const iterator of allItems) {
 ${iterator.description}
 {% /content %}`
     fs.writeFileSync(indexFile, content, 'utf8')
+    let sidebarData = {
+        title: iterator.name,
+        href: `/${iterator.name.split(' ').join('-').toLowerCase()}`,
+        expanded: false,
+        children: iterator.item?.length > 0 ? [] : undefined
+    }
+
     for (const element of iterator.item) {
         let apiName = element.name;
-        let apiFileName = `${apiName.split(' ').join('-').toLowerCase()}.md`
-        let filePath = `pages/docs/${folderName}/${apiFileName}`
+        let apiFileName = `${apiName.split(' ').join('-').toLowerCase()}`
+        let filePath = `pages/docs/${folderName}/${apiFileName}.md`
         fs.ensureFileSync(filePath)
         let markdownContent = makeMarkdownContent(element, postmanJsonData.variable)
         fs.writeFileSync(filePath, markdownContent, 'utf8')
+
+        let sidebarChildData = {
+            title: apiName,
+            href: `${sidebarData.href}/${apiFileName}`
+        }
+        sidebarData.children.push(sidebarChildData)
     }
+    sidebarElement.push(sidebarData)
 }
+
+addLineToAFile(`${projectDir}/components/SideNav.tsx`, 
+    'const [items, setItems] = useState<Array<SidebarItem>>([])',
+    `const [items, setItems] = useState<Array<SidebarItem>>([])`
+)
