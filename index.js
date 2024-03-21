@@ -19,6 +19,7 @@ function convertToJsonString(txt) {
 
     return escapedString
 }
+
 function makeHeader(allHeaders) {
     if (!allHeaders || allHeaders.length == 0) {
         return JSON.stringify({})
@@ -64,7 +65,21 @@ function getContentData(data, type){
     }
 }
 
-function makeMarkdownContent(item) {
+function makeBaseUrlFromVariables(mainUrl, variables) {
+    if(!variables) return mainUrl;
+
+    let url = mainUrl?.raw
+    mainUrl.host.map((item) => {
+        let regex = /{{(.*?)}}/;
+        let baseUrlMatch = regex.exec(item);
+        let matchedVariable = variables.find(it => it.key == baseUrlMatch[1])
+        url = url.replace(item, matchedVariable.value)
+        url = url.replace(mainUrl?.path.join('/'), '')
+    })
+    return url
+}
+
+function makeMarkdownContent(item, variables) {
     let txt = `## ${item.name}
 
 {% codesblock %}
@@ -73,6 +88,7 @@ function makeMarkdownContent(item) {
     endpoint="${item.request?.url?.path.join('/')}"
     headers="${makeHeader(item.request?.header)}"
     data="${getContentData(item.request?.body?.raw, item.request?.body?.options?.raw?.language)}"
+    baseurl="${makeBaseUrlFromVariables(item.request?.url, variables)}"
 /%}
 
 ${responseGenerator(item.response)}
@@ -103,15 +119,27 @@ baseDir.push(projectName);
 process.chdir(baseDir.join('/'));
 
 let allItems = postmanJsonData.item;
+let sidebarElement = [
+    {
+        title: 'Introduction',
+        href: '/'
+    }
+]
 
 for (const iterator of allItems) {
-    let folderName = iterator.name.toLowerCase();
+    let folderName = iterator.name.split(' ').join('-').toLowerCase();
+    let indexFile = `pages/docs/${folderName}/index.md`
+    fs.ensureFileSync(indexFile)
+    let content = `{% content %}
+${iterator.description}
+{% /content %}`
+    fs.writeFileSync(indexFile, content, 'utf8')
     for (const element of iterator.item) {
         let apiName = element.name;
         let apiFileName = `${apiName.split(' ').join('-').toLowerCase()}.md`
         let filePath = `pages/docs/${folderName}/${apiFileName}`
         fs.ensureFileSync(filePath)
-        let markdownContent = makeMarkdownContent(element)
+        let markdownContent = makeMarkdownContent(element, postmanJsonData.variable)
         fs.writeFileSync(filePath, markdownContent, 'utf8')
     }
 }
