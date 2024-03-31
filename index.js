@@ -16,7 +16,7 @@ if (!jsonDocPath) {
 
 function addLineToAFile(filePath, replaceBy, replaceWith) {
     let data = fs.readFileSync(filePath, 'utf8')
-    
+
     const updatedContent = data.replace(replaceBy, replaceWith)
     fs.writeFileSync(filePath, updatedContent, 'utf8')
 }
@@ -35,27 +35,27 @@ function makeHeader(allHeaders) {
             let data = {};
             data[current.key] = current.value
 
-            return {...prev, ...data}
-        },{});
+            return { ...prev, ...data }
+        }, {});
 
         return convertToJsonString(JSON.stringify(headerObject))
     }
 }
 
 function responseGenerator(response) {
-    if(!response || response.length == 0) {
+    if (!response || response.length == 0) {
         return ``;
     }
 
     let successResponse = response.find(it => it.status == 'OK')
 
-    if(successResponse){
+    if (successResponse) {
         return `
 \`\`\`${successResponse?._postman_previewlanguage} {% title="Response Body" %}
 ${successResponse?.body}
 \`\`\`
 `
-    }else{
+    } else {
         return `
 \`\`\`${response[0]?._postman_previewlanguage} {% title="Response Body" %}
 ${response[0]?.body}
@@ -64,16 +64,17 @@ ${response[0]?.body}
     }
 }
 
-function getContentData(data, type){
-    if(type == 'json'){
+function getContentData(data, type) {
+    if (type == 'json') {
         return convertToJsonString(JSON.stringify(JSON.parse(data)))
-    }else{
+    } else {
         return data
     }
 }
 
 function makeBaseUrlFromVariables(mainUrl, variables) {
-    if(!variables) return mainUrl;
+    if (!mainUrl) return ''
+    if (!variables) return mainUrl;
 
     let url = mainUrl?.raw
     mainUrl.host.map((item) => {
@@ -88,7 +89,7 @@ function makeBaseUrlFromVariables(mainUrl, variables) {
 
 function makeMarkdownContent(item, variables) {
     let txt = `## ${item.name}
-
+{% docscontent %}
 {% codesblock %}
 {% apicalling 
     method="${item.request?.method.toLowerCase()}" 
@@ -104,8 +105,55 @@ ${responseGenerator(item.response)}
 {% content %}
 ${item.request?.description}
 {% /content %}
+{% /docscontent %}
 `
     return txt;
+}
+
+function makeMarkdownFileAndSidebar(allItems, parentFolderName, href) {
+    let hrefArr = [];
+    for (const iterator of allItems) {
+
+        if (Array.isArray(iterator.item)) {
+            let folderName = iterator.name.split(' ').join('-').toLowerCase();
+            let childFolderName = parentFolderName ? `${parentFolderName}/${folderName}` : folderName
+            let indexFile = `pages/docs/${childFolderName}/index.md`
+            fs.ensureFileSync(indexFile)
+            let content = `{% content %}
+${iterator.description}
+{% /content %}`
+
+            fs.writeFileSync(indexFile, content, 'utf8')
+
+            let sidebarData = {
+                title: iterator.name,
+                href: `/docs/${childFolderName}`,
+                expanded: true,
+                children: []
+            }
+
+            let parentHref = makeMarkdownFileAndSidebar(iterator.item, childFolderName, sidebarData.href)
+            sidebarData.children = parentHref
+            hrefArr.push(sidebarData)
+        } else {
+            let apiName = iterator.name;
+            let apiFileName = `${apiName.split(' ').join('-').toLowerCase()}`;
+            let filePath = `pages/docs/${parentFolderName}/${apiFileName}.md`;
+            fs.ensureFileSync(filePath)
+
+            let markdownContent = makeMarkdownContent(iterator, postmanJsonData.variable)
+            fs.writeFileSync(filePath, markdownContent, 'utf8')
+
+            let sidebarChildData = {
+                title: apiName,
+                href: href ? `${href}/${apiFileName}` : `docs/${apiFileName}`
+            }
+            hrefArr.push(sidebarChildData)
+        }
+
+    }
+
+    return hrefArr
 }
 
 let data = fs.readFileSync(jsonDocPath, 'utf8');
@@ -135,39 +183,41 @@ let sidebarElement = [
     }
 ]
 
-for (const iterator of allItems) {
-    let folderName = iterator.name.split(' ').join('-').toLowerCase();
-    let indexFile = `pages/docs/${folderName}/index.md`
-    fs.ensureFileSync(indexFile)
-    let content = `{% content %}
-${iterator.description}
-{% /content %}`
-    fs.writeFileSync(indexFile, content, 'utf8')
-    let sidebarData = {
-        title: iterator.name,
-        href: `/${iterator.name.split(' ').join('-').toLowerCase()}`,
-        expanded: false,
-        children: iterator.item?.length > 0 ? [] : undefined
-    }
+sidebarElement.push(...makeMarkdownFileAndSidebar(allItems))
 
-    for (const element of iterator.item) {
-        let apiName = element.name;
-        let apiFileName = `${apiName.split(' ').join('-').toLowerCase()}`
-        let filePath = `pages/docs/${folderName}/${apiFileName}.md`
-        fs.ensureFileSync(filePath)
-        let markdownContent = makeMarkdownContent(element, postmanJsonData.variable)
-        fs.writeFileSync(filePath, markdownContent, 'utf8')
+// for (const iterator of allItems) {
+//     let folderName = iterator.name.split(' ').join('-').toLowerCase();
+//     let indexFile = `pages/docs/${folderName}/index.md`
+//     fs.ensureFileSync(indexFile)
+//     let content = `{% content %}
+// ${iterator.description}
+// {% /content %}`
+//     fs.writeFileSync(indexFile, content, 'utf8')
+//     let sidebarData = {
+//         title: iterator.name,
+//         href: `/docs/${iterator.name.split(' ').join('-').toLowerCase()}`,
+//         expanded: false,
+//         children: iterator.item?.length > 0 ? [] : undefined
+//     }
 
-        let sidebarChildData = {
-            title: apiName,
-            href: `${sidebarData.href}/${apiFileName}`
-        }
-        sidebarData.children.push(sidebarChildData)
-    }
-    sidebarElement.push(sidebarData)
-}
+//     for (const element of iterator.item) {
+//         let apiName = element.name;
+//         let apiFileName = `${apiName.split(' ').join('-').toLowerCase()}`
+//         let filePath = `pages/docs/${folderName}/${apiFileName}.md`
+//         fs.ensureFileSync(filePath)
+//         let markdownContent = makeMarkdownContent(element, postmanJsonData.variable)
+//         fs.writeFileSync(filePath, markdownContent, 'utf8')
 
-addLineToAFile(`${projectDir}/components/SideNav.tsx`, 
+//         let sidebarChildData = {
+//             title: apiName,
+//             href: `${sidebarData.href}/${apiFileName}`
+//         }
+//         sidebarData.children.push(sidebarChildData)
+//     }
+//     sidebarElement.push(sidebarData)
+// }
+
+addLineToAFile(`${projectDir}/components/SideNav.tsx`,
     'const [items, setItems] = useState<Array<SidebarItem>>([])',
-    `const [items, setItems] = useState<Array<SidebarItem>>([])`
+    `const [items, setItems] = useState<Array<SidebarItem>>(${JSON.stringify(sidebarElement)})`
 )
