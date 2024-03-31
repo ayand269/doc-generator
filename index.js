@@ -167,7 +167,7 @@ baseDir.pop();
 process.chdir(baseDir.join('/'));
 
 // Create Next.js project with markdoc
-// execSync(`npx create-next-app@latest ${projectName} --ts --example "https://github.com/ayand269/api-structure-example"`);
+execSync(`npx create-next-app@latest ${projectName} --ts --example "https://github.com/ayand269/api-structure-example"`);
 const projectDir = process.cwd() + '/' + projectName;
 // go to new project dir
 baseDir.push(projectName);
